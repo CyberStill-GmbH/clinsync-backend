@@ -64,12 +64,19 @@ export class AuthService {
       return { user, patient };
     });
 
-    return this.buildAuthResponse(result.user.id, result.user.email, result.user.role);
+    return this.buildAuthResponse(
+      result.user.id,
+      result.user.email,
+      result.user.role,
+      result.patient.firstName,
+      result.patient.lastName,
+    );
   }
 
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
+      include: { patient: true },
     });
 
     if (!user || !user.isActive) {
@@ -82,13 +89,24 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas.');
     }
 
-    return this.buildAuthResponse(user.id, user.email, user.role);
+    return this.buildAuthResponse(
+      user.id,
+      user.email,
+      user.role,
+      user.patient?.firstName,
+      user.patient?.lastName,
+    );
   }
 
   async me(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
         patient: true,
       },
     });
@@ -101,6 +119,9 @@ export class AuthService {
       id: user.id,
       email: user.email,
       role: user.role,
+      name: user.patient
+        ? `${user.patient.firstName} ${user.patient.lastName}`.trim()
+        : user.email.split('@')[0],
       patient: user.patient,
     };
   }
@@ -111,7 +132,18 @@ export class AuthService {
     };
   }
 
-  private buildAuthResponse(id: string, email: string, role: UserRole) {
+  private buildAuthResponse(
+    id: string,
+    email: string,
+    role: UserRole,
+    firstName?: string | null,
+    lastName?: string | null,
+  ) {
+    const name =
+      firstName && lastName
+        ? `${firstName} ${lastName}`.trim()
+        : firstName ?? email.split('@')[0];
+
     const token = this.jwtService.sign({
       sub: id,
       email,
@@ -124,7 +156,7 @@ export class AuthService {
         id,
         email,
         role,
-        name: email.split('@')[0],
+        name,
       },
     };
   }

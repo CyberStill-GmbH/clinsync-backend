@@ -184,6 +184,19 @@ export class AppointmentsService {
   async validateAppointment(id: string) {
     const appointment = await this.getAdminAppointmentDetail(id);
 
+    const terminalStatuses: AppointmentStatus[] = [
+      AppointmentStatus.ATTENDED,
+      AppointmentStatus.NO_SHOW,
+      AppointmentStatus.CANCELLED_BY_RECEPTION,
+      AppointmentStatus.VALIDATED_BY_RECEPTION,
+    ];
+
+    if (terminalStatuses.includes(appointment.status)) {
+      throw new ConflictException(
+        `No se puede validar una cita con estado "${appointment.status}".`,
+      );
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.appointment.update({
         where: { id },
