@@ -10,7 +10,12 @@ export class PrismaService
 {
   constructor() {
     const connectionString = process.env.DATABASE_URL;
-    const pool = new Pool({ connectionString });
+    const isProduction = process.env.NODE_ENV === 'production' || connectionString?.includes('supabase.co') || connectionString?.includes('neon.tech');
+    
+    const pool = new Pool({
+      connectionString,
+      ssl: isProduction ? { rejectUnauthorized: false } : false,
+    });
     const adapter = new PrismaPg(pool);
     super({ adapter });
   }
