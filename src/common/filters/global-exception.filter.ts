@@ -62,7 +62,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           break;
         default:
           status = HttpStatus.INTERNAL_SERVER_ERROR;
-          message = 'Error de base de datos.';
+          message = `Error de base de datos [${exception.code}]: ${exception.message}`;
           error = 'Database Error';
           this.logger.error(
             `Unhandled Prisma error [${exception.code}]: ${exception.message}`,
