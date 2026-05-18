@@ -15,14 +15,23 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   // ── CORS ──────────────────────────────────────────────────────────────
-  const allowedOrigins = process.env.FRONTEND_URL
-    ? [process.env.FRONTEND_URL]
-    : [
-        'http://localhost:5173',
-        'http://localhost:5174',
-        'http://127.0.0.1:5173',
-        'http://127.0.0.1:5174',
-      ];
+  const allowedOrigins: string[] = [];
+  if (process.env.FRONTEND_URL) {
+    const origin = process.env.FRONTEND_URL.trim();
+    allowedOrigins.push(origin);
+    if (origin.endsWith('/')) {
+      allowedOrigins.push(origin.slice(0, -1));
+    } else {
+      allowedOrigins.push(`${origin}/`);
+    }
+  } else {
+    allowedOrigins.push(
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:5174',
+    );
+  }
 
   app.enableCors({
     origin: allowedOrigins,
