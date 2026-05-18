@@ -88,9 +88,12 @@ async function bootstrapServerless() {
     // ── Health check ──────────────────────────────────
     const httpAdapter = app.getHttpAdapter();
     httpAdapter.get('/health', (_req, res) => {
+      const rawUrl = process.env.DATABASE_URL || '';
+      const maskedUrl = rawUrl.replace(/:([^:@]+)@/, ':******@');
       res.status(200).json({
         status: 'ok',
         service: 'clinsync-backend',
+        databaseUrl: maskedUrl,
         timestamp: new Date().toISOString(),
       });
     });
