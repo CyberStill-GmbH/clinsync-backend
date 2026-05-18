@@ -34,7 +34,30 @@ async function bootstrap() {
   }
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const originTrimmed = origin.trim();
+
+      // 1. Check if matches allowedOrigins list
+      const isAllowed = allowedOrigins.some(
+        (o) => o.toLowerCase() === originTrimmed.toLowerCase()
+      );
+
+      // 2. Also dynamically allow any clinsync Vercel production or deployment preview domain
+      const isVercelAllowed = /^https:\/\/(clinsync|clinsync-frontend)(-[\w-]+)?\.vercel\.app\/?$/i.test(
+        originTrimmed
+      );
+
+      if (isAllowed || isVercelAllowed) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
