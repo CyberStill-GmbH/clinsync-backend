@@ -139,51 +139,54 @@ async function main() {
   });
 
   // 5. Create Schedules (AVAILABLE)
-  console.log('Seeding schedules...');
-  const scheduleDate1 = new Date('2026-05-20');
-  const scheduleDate2 = new Date('2026-05-21');
+  console.log('Seeding dynamic multi-day schedules...');
+  const timeSlots = [
+    { start: '08:00', end: '08:30' },
+    { start: '09:00', end: '09:30' },
+    { start: '10:00', end: '10:30' },
+    { start: '11:00', end: '11:30' },
+    { start: '14:00', end: '14:30' },
+    { start: '15:00', end: '15:30' },
+    { start: '16:00', end: '16:30' },
+  ];
 
-  await prisma.schedule.upsert({
-    where: { id: 'sch-torres-1' },
-    update: { status: ScheduleStatus.AVAILABLE },
-    create: {
-      id: 'sch-torres-1',
-      areaId: areaGral.id,
-      doctorId: docTorres.id,
-      date: scheduleDate1,
-      startTime: '08:00',
-      endTime: '08:30',
-      status: ScheduleStatus.AVAILABLE,
-    },
-  });
+  const doctorsList = [
+    { id: docTorres.id, areaId: areaGral.id, prefix: 'torres' },
+    { id: docSoto.id, areaId: areaCardio.id, prefix: 'soto' },
+    { id: docRios.id, areaId: areaPedia.id, prefix: 'rios' },
+  ];
 
-  await prisma.schedule.upsert({
-    where: { id: 'sch-soto-1' },
-    update: { status: ScheduleStatus.AVAILABLE },
-    create: {
-      id: 'sch-soto-1',
-      areaId: areaCardio.id,
-      doctorId: docSoto.id,
-      date: scheduleDate1,
-      startTime: '09:00',
-      endTime: '09:30',
-      status: ScheduleStatus.AVAILABLE,
-    },
-  });
+  // Seed for 12 days: from 2026-05-18 to 2026-05-29
+  for (let dayOffset = 0; dayOffset < 12; dayOffset++) {
+    const targetDate = new Date('2026-05-18');
+    targetDate.setDate(targetDate.getDate() + dayOffset);
 
-  await prisma.schedule.upsert({
-    where: { id: 'sch-rios-1' },
-    update: { status: ScheduleStatus.AVAILABLE },
-    create: {
-      id: 'sch-rios-1',
-      areaId: areaPedia.id,
-      doctorId: docRios.id,
-      date: scheduleDate2,
-      startTime: '10:00',
-      endTime: '10:30',
-      status: ScheduleStatus.AVAILABLE,
-    },
-  });
+    const yyyy = targetDate.getFullYear();
+    const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(targetDate.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+
+    for (const doc of doctorsList) {
+      for (let slotIndex = 0; slotIndex < timeSlots.length; slotIndex++) {
+        const slot = timeSlots[slotIndex];
+        const scheduleId = `sch-${doc.prefix}-${dateStr}-${slotIndex}`;
+
+        await prisma.schedule.upsert({
+          where: { id: scheduleId },
+          update: { status: ScheduleStatus.AVAILABLE },
+          create: {
+            id: scheduleId,
+            areaId: doc.areaId,
+            doctorId: doc.id,
+            date: new Date(dateStr),
+            startTime: slot.start,
+            endTime: slot.end,
+            status: ScheduleStatus.AVAILABLE,
+          },
+        });
+      }
+    }
+  }
 
   console.log('Seed ejecutado correctamente con datos idempotentes.');
 }
