@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: clinsync-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: clinsync_user
+      POSTGRES_PASSWORD: clinsync_password
+      POSTGRES_DB: clinsync_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - clinsync_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  clinsync_postgres_data:
