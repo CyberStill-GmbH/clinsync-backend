@@ -6,183 +6,164 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Swagger](https://img.shields.io/badge/Swagger-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)](https://swagger.io/)
 [![JWT](https://img.shields.io/badge/JWT-black?style=for-the-badge&logo=JSON%20web%20tokens)](https://jwt.io/)
-[![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Helmet](https://img.shields.io/badge/Helmet-informational?style=for-the-badge)](https://helmetjs.github.io/)
 
-An enterprise-grade, high-performance RESTful API powering **ClinSync**, a modern healthcare appointment scheduling ecosystem. Designed to automate clinical operations, reduce scheduling conflicts, and deliver real-time operational metrics for clinics and healthcare providers.
-
----
-
-## 🏥 Real-World Healthcare Impact
-
-In modern clinical environments, operational delays and double-bookings translate directly to patient frustration and sub-optimal resource allocation. **ClinSync Backend** eliminates these bottlenecks by introducing:
-* **Atomic Schedule Locking:** Transitioning schedule slots to `OCCUPIED` dynamically, preventing 409 scheduling conflicts.
-* **Role-Based Workflows:** Distinct boundaries between Patient self-scheduling and Administrator/Receptionist clinical coordination.
-* **Transactional Reliability:** Backed by PostgreSQL and Prisma ORM to ensure patient records, clinical schedules, and doctor availability are synchronized atomically.
+Enterprise-grade RESTful API powering **ClinSync** — a modern healthcare appointment scheduling system. Built to automate clinical workflows, eliminate scheduling conflicts, and give clinic administrators real-time operational visibility.
 
 ---
 
-## 🏗️ System Architecture & Data Flow
+## 🏥 Why ClinSync?
 
-ClinSync Backend follows the **NestJS Modular Layered Architecture**, enforcing a strict separation of concerns through modules, controllers, services, and data repositories.
+Healthcare scheduling systems fail at predictable places: double-bookings, cancelled appointments without traceability, and no real-time data for administrators. ClinSync solves all three:
 
-### Modular Architecture Map
-```text
-                  [ HTTP Clients / Frontend ]
-                              │
-                    ┌─────────▼─────────┐
-                    │    Global DTOs    │
-                    │  ValidationPipe   │
-                    └─────────┬─────────┘
-                              │
-                    ┌─────────▼─────────┐
-                    │    Controllers    │ (Routes, Request Mapping, Swagger Docs)
-                    └─────────┬─────────┘
-                              │
-                    ┌─────────▼─────────┐
-                    │     Services      │ (Business Logic, Auth Guards, Transaction Control)
-                    └─────────┬─────────┘
-                              │
-                    ┌─────────▼─────────┐
-                    │   Prisma Client   │ (Database Transactions, ORM Layer)
-                    └─────────┬─────────┘
-                              │
-                    ┌─────────▼─────────┐
-                    │ PostgreSQL Engine │
-                    └───────────────────┘
+- **Atomic Schedule Locking** via Prisma transactions — no double-bookings, ever
+- **Full Audit Trail** — every appointment status change is logged in `AppointmentHistory`
+- **Role-Gated Access** — Patients, Admins, and Receptionists have strictly enforced access boundaries
+- **Terminal Status Guards** — cannot re-validate an attended or cancelled appointment
+- **Clean Error Surface** — a global exception filter maps every Prisma and HTTP error to a structured, user-facing response with no stack traces
+
+---
+
+## 🏗️ System Architecture
+
+```
+HTTP Client (Frontend / Swagger)
+         │
+         ▼
+┌─────────────────────────────────────────────┐
+│           NestJS Application                │
+│                                             │
+│  helmet()  ─  CORS  ─  GlobalExFilter       │
+│  ValidationPipe  ─  JwtAuthGuard            │
+│  RolesGuard  ─  @Roles(ADMIN, PATIENT...)   │
+│                                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
+│  │   Auth   │  │ Appoints │  │  Admin   │  │
+│  │ Module   │  │ Module   │  │  Module  │  │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  │
+│       │             │              │        │
+│  ┌────▼─────────────▼──────────────▼─────┐  │
+│  │            PrismaService              │  │
+│  └────────────────────┬──────────────────┘  │
+└───────────────────────┼─────────────────────┘
+                        │
+                   PostgreSQL
 ```
 
-* **Modules:** Highly decoupled domains (`AuthModule`, `PatientsModule`, `AreasModule`, `DoctorsModule`, `SchedulesModule`, `AppointmentsModule`, `AdminModule`).
-* **Controllers:** Expose standard REST endpoints, enforce validation via `class-validator` DTOs, and auto-generate OpenAPI/Swagger documentation.
-* **Services:** Enforce business rules, validate state transitions, and calculate administrative dashboard analytics.
-* **Prisma Service:** Database abstraction extending `PrismaClient` with automatic `$connect` lifecycle management.
+---
+
+## 🔒 Security Layers
+
+| Layer | Implementation |
+|---|---|
+| **HTTP Headers** | `helmet()` — sets `X-Frame-Options`, `X-XSS-Protection`, `Content-Security-Policy`, etc. |
+| **CORS** | Env-driven `FRONTEND_URL` with explicit methods and headers whitelist |
+| **Authentication** | Passport JWT strategy — `sub`, `email`, `role` claims in token |
+| **Authorization** | `@Roles()` + `RolesGuard` — endpoint-level role enforcement |
+| **Input Validation** | Global `ValidationPipe` with `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true` |
+| **Error Handling** | `GlobalExceptionFilter` — Prisma errors mapped to 404/409/400, never exposing internal details |
+| **Password Storage** | `bcrypt` with `saltRounds: 10` |
+| **Data Exposure** | `me()` uses `select` — `passwordHash` is never returned to clients |
 
 ---
 
-## 🔒 Security & Compliance
-
-The backend implements a multi-tier security framework to protect patient privacy and clinical operations:
-* **JWT Bearer Authentication:** Secure stateless session handling via Passport JWT strategy. Access tokens contain `sub` (userId), `email`, and `role` claims.
-* **Role-Based Access Control (RBAC):** Strict routing authorization using `@Roles(UserRole.ADMIN, UserRole.RECEPTIONIST)` and `@UseGuards(JwtAuthGuard, RolesGuard)`.
-* **Cors Validation:** Preflight `OPTIONS` requests allowed with credentials mapping back to trusted clinical frontends (`process.env.FRONTEND_URL`).
-* **Input Sanitization:** Global `ValidationPipe` with `transform: true` and `whitelist: true` prevents SQL injection, parameter tampering, and exposes exact client error feedback.
-
----
-
-## ⚙️ Getting Started
+## ⚙️ Setup
 
 ### Prerequisites
-* Node.js (v18+)
-* PostgreSQL instance running locally or via Docker
-* npm or yarn
+- Node.js v18+
+- PostgreSQL 14+
 
-### 1. Environment Configuration
-Create a `.env` file in the root directory:
+### 1. Environment Variables
 ```env
-# Database configuration
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/clinsync?schema=public"
+# Database
+DATABASE_URL="postgresql://user:pass@localhost:5432/clinsync?schema=public"
 
-# Authentication secret
-JWT_SECRET="clinsync_ultra_secure_jwt_secret_2026_key"
+# JWT
+JWT_SECRET="clinsync_ultra_secure_jwt_secret_2026"
 
-# CORS policy configuration
+# CORS — must match the frontend origin exactly
 FRONTEND_URL="http://localhost:5173"
 
-# Operational PORT
 PORT=3000
 ```
 
-### 2. Installation & Setup
+### 2. Install & Initialize
 ```bash
-# Clone the repository and install dependencies
-cd clinsync-backend
 npm install
-
-# Generate Prisma Client and apply migrations
 npx prisma generate
-npx prisma db push
+npx prisma db push        # or: npx prisma migrate dev
+npx prisma db seed        # seeds 252 schedules across 12 days
 ```
 
-### 3. Database Seeding (Idempotent)
-Generate **252 real doctor schedules** spanning a **12-day consecutive window** (May 18 to May 29, 2026), along with clinical areas, default administrative profiles, and test accounts:
+### 3. Run
 ```bash
-npx prisma db seed
+npm run start:dev    # development with hot-reload
+npm run build        # production compile (exit 0)
+npm run start:prod   # run production build
 ```
 
-### 4. Running the Server
+### 4. Verify
+| URL | Purpose |
+|---|---|
+| `http://localhost:3000/health` | Health check — returns `{ status: "ok" }` |
+| `http://localhost:3000/api/docs` | Interactive Swagger UI |
+
+---
+
+## 📡 API Reference
+
+### 🔐 Auth
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| POST | `/api/auth/register` | Public | Register patient (creates User + Patient atomically) |
+| POST | `/api/auth/login` | Public | Returns JWT + user with real `firstName lastName` |
+| GET | `/api/auth/me` | Any | Current user profile — never exposes `passwordHash` |
+| POST | `/api/auth/logout` | Any | Session termination signal |
+
+### 📅 Appointments
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| POST | `/api/appointments` | PATIENT | Book appointment — atomic schedule lock |
+| GET | `/api/appointments/me` | PATIENT | My appointment history |
+| GET | `/api/admin/appointments` | ADMIN/RECEPTIONIST | All appointments (filterable by status, area, date) |
+| PATCH | `/api/admin/appointments/:id/validate` | ADMIN/RECEPTIONIST | Validate — guards terminal statuses |
+| PATCH | `/api/admin/appointments/:id/reschedule` | ADMIN/RECEPTIONIST | Reschedule — releases old slot, locks new one |
+| PATCH | `/api/admin/appointments/:id/cancel` | ADMIN/RECEPTIONIST | Cancel with mandatory reason |
+| PATCH | `/api/admin/appointments/:id/attendance` | ADMIN/RECEPTIONIST | Mark ATTENDED or NO_SHOW |
+
+### 🏢 Admin
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/api/admin/dashboard` | ADMIN/RECEPTIONIST | Today's stats, pending, validated, no-shows, totalPatients |
+| GET | `/api/admin/patients` | ADMIN/RECEPTIONIST | Paginated patient list with `?page=&limit=&search=` |
+| GET | `/api/admin/patients/:id` | ADMIN/RECEPTIONIST | Patient detail |
+| GET | `/api/admin/patients/:id/appointments` | ADMIN/RECEPTIONIST | Patient appointment history |
+
+### 🏥 Clinical Directory
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/api/areas` | User | Active medical specialties |
+| GET | `/api/doctors` | User | All active doctors (filterable by `?areaId=`) |
+| GET | `/api/schedules/available` | User | Available time slots |
+
+---
+
+## ✅ Build Verification
+
 ```bash
-# Development mode with hot-reload
-npm run start:dev
-
-# Production build and execution
-npm run build
-npm run start:prod
+npx prisma validate    # ✅ The schema is valid 🚀
+npx prisma generate    # ✅ Prisma Client v7.8.0 generated in 202ms
+npm run build          # ✅ nest build — Exit code: 0
+npx prisma db seed     # ✅ 252 schedules seeded across 12 days
 ```
 
 ---
 
-## 📡 API Endpoints Reference
+## 🗺️ Roadmap
 
-### 🔐 Authentication Module (`/api/auth`)
-| Method | Endpoint | Access | Description |
-| :--- | :--- | :--- | :--- |
-| **POST** | `/api/auth/register` | Public | Register a new Patient profile + User credentials |
-| **POST** | `/api/auth/login` | Public | Authenticate user; returns JWT token + user details |
-| **GET** | `/api/auth/me` | User | Get currently authenticated profile details |
-| **POST** | `/api/auth/logout` | User | Terminate session and invalidate client tokens |
-
-### 👨‍⚕️ Clinical Directories (`/api/areas`, `/api/doctors`)
-| Method | Endpoint | Access | Description |
-| :--- | :--- | :--- | :--- |
-| **GET** | `/api/areas` | User | Retrieve list of active medical specialties |
-| **GET** | `/api/doctors` | User | List all active medical professionals |
-| **GET** | `/api/doctors?areaId=:id` | User | Filter active professionals by clinical area |
-
-### 📅 Patient Scheduling (`/api/schedules`, `/api/appointments`)
-| Method | Endpoint | Access | Description |
-| :--- | :--- | :--- | :--- |
-| **GET** | `/api/schedules/available` | User | List active unbooked slot dates and hours |
-| **POST** | `/api/appointments` | Patient | Reserve a schedule slot (transitions slot to `OCCUPIED`) |
-| **GET** | `/api/appointments/me` | Patient | List scheduling history for the logged-in Patient |
-
-### 🏢 Administrative Portal (`/api/admin`)
-| Method | Endpoint | Access | Description |
-| :--- | :--- | :--- | :--- |
-| **GET** | `/api/admin/dashboard` | Admin | Fetch aggregate clinical performance metrics |
-| **GET** | `/api/admin/appointments` | Admin | Retrieve all patient bookings in the clinic |
-| **PATCH** | `/api/admin/appointments/:id/validate` | Admin | Verify and validate a pending patient booking |
-| **PATCH** | `/api/admin/appointments/:id/reschedule` | Admin | Reprogram booking (releases old slot, locks new one) |
-| **PATCH** | `/api/admin/appointments/:id/cancel` | Admin | Cancel appointment with reason (releases schedule slot) |
-| **PATCH** | `/api/admin/appointments/:id/attendance` | Admin | Mark patient attendance (`ATTENDED` / `NO_SHOW`) |
-
----
-
-## ✅ Validation & Build Verification Results
-
-ClinSync Backend compiles with **strict type-checking constraints** and complies with the NestJS operational compiler standards:
-
-* **Prisma Schema Validation:**
-  ```bash
-  > npx prisma validate
-  Prisma schema loaded from prisma\schema.prisma.
-  The schema at prisma\schema.prisma is valid 🚀
-  ```
-* **Prisma Client Generation:**
-  ```bash
-  > npx prisma generate
-  ✔ Generated Prisma Client (v7.8.0) to .\node_modules\@prisma\client in 202ms
-  ```
-* **NestJS Production Compile:**
-  ```bash
-  > npm run build
-  nest build
-  Exit code: 0 (SUCCESS)
-  ```
-
----
-
-## 📈 Roadmap & Contributions
-1. **Multi-Factor Auth (MFA):** Extra security layer for clinic operators.
-2. **Automated Queue Management:** Live tracking of patient delays in reception.
-3. **Medical Auditing Logs:** Comprehensive logging of schedule changes for audit trails.
-
-To contribute, please open a feature branch and submit a PR against `main`. Enforce ESLint/Prettier formatting standards before committing.
+| Version | Feature |
+|---|---|
+| **v1.1** | Refresh token rotation + session revocation |
+| **v1.2** | Email notifications on booking confirmed/cancelled (SMTP ready) |
+| **v1.3** | Doctor user accounts (scheduling self-management) |
+| **v2.0** | WebSocket-based real-time updates (replaces BroadcastChannel) |
