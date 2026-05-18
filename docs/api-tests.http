@@ -1,0 +1,191 @@
+### ClinSync API Integration Test Suite
+# Use with REST Client (VS Code) or import into Thunder Client / Postman.
+
+@baseUrl = http://localhost:3000/api
+
+# ==========================================
+# 1. AUTHENTICATION & PATIENT REGISTRATION
+# ==========================================
+
+### Register Patient
+# @name registerPatient
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "firstName": "Paciente",
+  "lastName": "Demo",
+  "dni": "87654321",
+  "phone": "987654321",
+  "email": "paciente.demo@clinsync.com",
+  "password": "12345678",
+  "birthDate": "1995-10-15",
+  "gender": "FEMENINO",
+  "address": "Calle Las Flores 123",
+  "district": "Miraflores"
+}
+
+### Login Patient (to receive token)
+# @name loginPatient
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "paciente.demo@clinsync.com",
+  "password": "12345678"
+}
+
+### Copy the token from login response and paste below
+@patientToken = {{loginPatient.response.body.token}}
+
+### Get Current Logged-in Patient Profile
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{patientToken}}
+
+### Get Patient Profile Details (Patient Area)
+GET {{baseUrl}}/patients/me
+Authorization: Bearer {{patientToken}}
+
+### Update Patient Profile Details
+PATCH {{baseUrl}}/patients/me
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "phone": "912345678",
+  "address": "Calle Las Flores 456",
+  "district": "San Isidro"
+}
+
+
+# ==========================================
+# 2. PATIENT FLOW (BROWSING & BOOKING)
+# ==========================================
+
+### Get Public Active Areas
+# @name getAreas
+GET {{baseUrl}}/areas
+
+### Get Available Schedules (Public)
+# @name getSchedules
+GET {{baseUrl}}/schedules/available
+
+### Copy an areaId and scheduleId from the results
+# Medicina General areaId: area-medicina-general
+# Available scheduleId: sch-torres-1
+@areaId = area-medicina-general
+@scheduleId = sch-torres-1
+
+### Get Schedules for a Specific Area
+GET {{baseUrl}}/areas/{{areaId}}/schedules
+
+### Create Appointment (Patient)
+# @name createAppointment
+POST {{baseUrl}}/appointments
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "areaId": "{{areaId}}",
+  "doctorId": "doc-andrea-torres",
+  "scheduleId": "{{scheduleId}}",
+  "reason": "Consulta general anual de control"
+}
+
+### Copy the appointmentId from response
+@appointmentId = {{createAppointment.response.body.id}}
+
+### Get My Appointments (Patient)
+GET {{baseUrl}}/appointments/me
+Authorization: Bearer {{patientToken}}
+
+### Get My Appointment Details (Patient)
+GET {{baseUrl}}/appointments/me/{{appointmentId}}
+Authorization: Bearer {{patientToken}}
+
+
+# ==========================================
+# 3. CONFLICT & ACCESS SECURITY TESTS
+# ==========================================
+
+### Double Booking Conflict (Try booking same schedule ID again)
+POST {{baseUrl}}/appointments
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "areaId": "{{areaId}}",
+  "doctorId": "doc-andrea-torres",
+  "scheduleId": "{{scheduleId}}",
+  "reason": "Intento de reserva duplicada"
+}
+# Expected: 409 Conflict
+
+### Booking Without Token (Unauthorized access)
+POST {{baseUrl}}/appointments
+Content-Type: application/json
+
+{
+  "areaId": "{{areaId}}",
+  "doctorId": "doc-andrea-torres",
+  "scheduleId": "{{scheduleId}}",
+  "reason": "Intento sin token"
+}
+# Expected: 401 Unauthorized
+
+### Patient Accessing Admin Dashboard (Forbidden access)
+GET {{baseUrl}}/admin/dashboard
+Authorization: Bearer {{patientToken}}
+# Expected: 403 Forbidden
+
+
+# ==========================================
+# 4. ADMIN & RECEPTIONIST MANAGEMENT FLOW
+# ==========================================
+
+### Login Admin
+# @name loginAdmin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@clinsync.com",
+  "password": "12345678"
+}
+
+### Copy the token from admin login response
+@adminToken = {{loginAdmin.response.body.token}}
+
+### Get Admin Dashboard Stats
+GET {{baseUrl}}/admin/dashboard
+Authorization: Bearer {{adminToken}}
+
+### Get Admin Appointments List
+GET {{baseUrl}}/admin/appointments
+Authorization: Bearer {{adminToken}}
+
+### Validate Appointment (Status becomes VALIDATED_BY_RECEPTION)
+PATCH {{baseUrl}}/admin/appointments/{{appointmentId}}/validate
+Authorization: Bearer {{adminToken}}
+
+### Record Attendance (Status becomes ATTENDED)
+PATCH {{baseUrl}}/admin/appointments/{{appointmentId}}/attendance
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "ATTENDED",
+  "observation": "Paciente llegó a tiempo y completó su revisión"
+}
+
+### Get Admin Patients List
+GET {{baseUrl}}/admin/patients
+Authorization: Bearer {{adminToken}}
+
+### Get Specific Patient Details
+GET {{baseUrl}}/admin/patients/{{loginPatient.response.body.user.id}}
+Authorization: Bearer {{adminToken}}
+
+### Logout Session
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{patientToken}}
