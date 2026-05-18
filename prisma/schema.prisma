@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PATIENT
+  ADMIN
+  RECEPTIONIST
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  VALIDATED_BY_RECEPTION
+  RESCHEDULED
+  CANCELLED_BY_RECEPTION
+  ATTENDED
+  NO_SHOW
+}
+
+enum ScheduleStatus {
+  AVAILABLE
+  OCCUPIED
+  INACTIVE
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         UserRole
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  patient Patient?
+}
+
+model Patient {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  firstName             String
+  lastName              String
+  dni                   String   @unique
+  phone                 String
+  birthDate             DateTime?
+  gender                String?
+  address               String?
+  district              String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+}
+
+model Area {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  doctors      Doctor[]
+  schedules    Schedule[]
+  appointments Appointment[]
+}
+
+model Doctor {
+  id             String   @id @default(uuid())
+  areaId         String
+  fullName       String
+  documentNumber String?
+  phone          String?
+  email          String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  area         Area          @relation(fields: [areaId], references: [id])
+  schedules    Schedule[]
+  appointments Appointment[]
+}
+
+model Schedule {
+  id        String         @id @default(uuid())
+  areaId    String
+  doctorId  String?
+  date      DateTime
+  startTime String
+  endTime   String
+  status    ScheduleStatus @default(AVAILABLE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  area         Area          @relation(fields: [areaId], references: [id])
+  doctor       Doctor?       @relation(fields: [doctorId], references: [id])
+  appointments Appointment[]
+
+  @@index([areaId])
+  @@index([doctorId])
+  @@index([date])
+}
+
+model Appointment {
+  id                 String            @id @default(uuid())
+  code               String            @unique
+  patientId          String
+  areaId             String
+  doctorId           String?
+  scheduleId         String
+  status             AppointmentStatus @default(PENDING)
+  reason             String?
+  cancellationReason String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  patient  Patient  @relation(fields: [patientId], references: [id])
+  area     Area     @relation(fields: [areaId], references: [id])
+  doctor   Doctor?  @relation(fields: [doctorId], references: [id])
+  schedule Schedule @relation(fields: [scheduleId], references: [id])
+
+  @@index([patientId])
+  @@index([areaId])
+  @@index([doctorId])
+  @@index([scheduleId])
+  @@index([status])
+}
+
+model AppointmentHistory {
+  id            String   @id @default(uuid())
+  appointmentId String
+  action        String
+  previousStatus String?
+  newStatus      String?
+  note          String?
+  createdAt     DateTime @default(now())
+}
