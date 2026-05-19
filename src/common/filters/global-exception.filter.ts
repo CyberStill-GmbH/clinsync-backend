@@ -80,6 +80,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     // ── Unknown errors ────────────────────────────────────────────────────
     else {
       this.logger.error('Unhandled exception:', exception);
+      if (exception instanceof Error) {
+        message = `[DEBUG] ${exception.constructor.name}: ${exception.message}`;
+      }
     }
 
     response.status(status).json({
